@@ -1,0 +1,52 @@
+name: Daily Performance Sync
+
+on:
+  # Runs Monday–Friday at 6:00 AM SGT (22:00 UTC previous day)
+  # This is ~2 hours after US market close (4pm ET = 8pm UTC during EDT)
+  # giving IBKR time to finalise end-of-day trade data before we pull it.
+  schedule:
+    - cron: "0 22 * * 1-5"
+
+  # Also allows you to trigger manually from GitHub Actions tab
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    # Grant write permission so the action can commit the updated JSON file
+    permissions:
+      contents: write
+
+    steps:
+      # Step 1 — Check out your repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2 — Set up Python
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Step 3 — Install Python dependencies
+      - name: Install dependencies
+        run: pip install requests
+
+      # Step 4 — Run the performance sync script
+      - name: Run performance sync
+        env:
+          IBKR_FLEX_TOKEN:  ${{ secrets.IBKR_FLEX_TOKEN }}
+          IBKR_QUERY_ID:    ${{ secrets.IBKR_QUERY_ID }}
+          STARTING_BALANCE: ${{ secrets.STARTING_BALANCE }}
+        run: python performance_sync.py
+
+      # Step 5 — Commit and push the updated data/performance_data.json
+      - name: Commit updated data
+        run: |
+          git config --global user.name  "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/performance_data.json
+          # Only commit if the file actually changed
+          git diff --cached --quiet || git commit -m "Auto-update performance data $(date -u +'%Y-%m-%d')"
+          git push
