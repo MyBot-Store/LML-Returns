@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Strategy Performance</title>
+
+  <!-- Chart.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+  <!-- Google Fonts: DM Serif Display + DM Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ── Reset & Variables ──────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #0d0f14;
+      --surface:     #141720;
+      --surface2:    #1c2030;
+      --border:      #252a3a;
+      --text:        #e8eaf2;
+      --muted:       #6b7280;
+      --accent:      #4fffb0;       /* bright mint green — equity line */
+      --accent-dim:  rgba(79,255,176,0.12);
+      --red:         #ff5370;
+      --gold:        #ffd166;
+      --font-serif:  'DM Serif Display', serif;
+      --font-mono:   'DM Mono', monospace;
+      --font-sans:   'DM Sans', sans-serif;
+    }
+
+    html, body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      font-size: 14px;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Layout ─────────────────────────────────────────────────────── */
+    .wrapper {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 28px 20px 40px;
+    }
+
+    /* ── Header ─────────────────────────────────────────────────────── */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-bottom: 28px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .header-left h1 {
+      font-family: var(--font-serif);
+      font-size: 1.9rem;
+      font-weight: 400;
+      color: var(--text);
+      letter-spacing: -0.01em;
+      line-height: 1.1;
+    }
+
+    .header-left .subtitle {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 5px;
+      font-family: var(--font-mono);
+      letter-spacing: 0.04em;
+    }
+
+    .last-updated {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-align: right;
+    }
+
+    .live-dot {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      background: var(--accent);
+      border-radius: 50%;
+      margin-right: 5px;
+      animation: pulse 2s infinite;
+      vertical-align: middle;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+
+    /* ── Metric Cards ────────────────────────────────────────────────── */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .metric-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+
+    .metric-card:hover { border-color: #3a4060; }
+
+    .metric-card.highlight {
+      border-color: rgba(79,255,176,0.3);
+      background: linear-gradient(135deg, #141720 60%, rgba(79,255,176,0.05));
+    }
+
+    .metric-label {
+      font-size: 0.68rem;
+      color: var(--muted);
+      font-family: var(--font-mono);
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .metric-value {
+      font-family: var(--font-mono);
+      font-size: 1.45rem;
+      font-weight: 500;
+      color: var(--text);
+      line-height: 1;
+    }
+
+    .metric-value.positive { color: var(--accent); }
+    .metric-value.negative { color: var(--red); }
+    .metric-value.neutral  { color: var(--gold); }
+
+    .metric-sub {
+      font-size: 0.68rem;
+      color: var(--muted);
+      margin-top: 5px;
+      font-family: var(--font-mono);
+    }
+
+    /* ── Chart Container ─────────────────────────────────────────────── */
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+
+    .chart-title {
+      font-size: 0.7rem;
+      font-family: var(--font-mono);
+      color: var(--muted);
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    .chart-wrap {
+      position: relative;
+      height: 260px;
+    }
+
+    /* ── Bottom Row: Win/Loss + Trade Stats ──────────────────────────── */
+    .bottom-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 9px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.8rem;
+    }
+
+    .stat-row:last-child { border-bottom: none; }
+
+    .stat-name { color: var(--muted); font-family: var(--font-mono); font-size: 0.72rem; }
+    .stat-val  { color: var(--text);  font-family: var(--font-mono); font-weight: 500; }
+
+    /* ── Win/Loss Bar ────────────────────────────────────────────────── */
+    .winloss-bar {
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      margin: 12px 0 8px;
+      overflow: hidden;
+    }
+
+    .winloss-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), #00d4a0);
+      border-radius: 3px;
+      transition: width 1s ease;
+    }
+
+    .winloss-labels {
+      display: flex;
+      justify-content: space-between;
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--muted);
+    }
+
+    /* ── Disclaimer ──────────────────────────────────────────────────── */
+    .disclaimer {
+      margin-top: 20px;
+      font-size: 0.65rem;
+      color: var(--muted);
+      line-height: 1.6;
+      font-family: var(--font-mono);
+      border-top: 1px solid var(--border);
+      padding-top: 14px;
+    }
+
+    /* ── Loading / Error State ───────────────────────────────────────── */
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 300px;
+      font-family: var(--font-mono);
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+
+    /* ── Mobile ──────────────────────────────────────────────────────── */
+    @media (max-width: 600px) {
+      .header          { flex-direction: column; align-items: flex-start; gap: 8px; }
+      .bottom-grid     { grid-template-columns: 1fr; }
+      .metrics-grid    { grid-template-columns: repeat(2, 1fr); }
+      .chart-wrap      { height: 200px; }
+      .metric-value    { font-size: 1.2rem; }
+    }
+  </style>
+</head>
+
+<body>
+<div class="wrapper" id="app">
+  <div class="loading">Loading performance data…</div>
+</div>
+
+<script>
+// ── Configuration ────────────────────────────────────────────────────────────
+// IMPORTANT: Replace YOUR_GITHUB_USERNAME and YOUR_REPO_NAME with your actual values
+const DATA_URL = "https://raw.githubusercontent.com/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME/main/data/performance_data.json";
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const fmt = {
+  pct:      v => (v >= 0 ? "+" : "") + v.toFixed(2) + "%",
+  currency: v => "$" + v.toLocaleString("en-US", {minimumFractionDigits: 2, maximumFractionDigits: 2}),
+  num:      v => v.toLocaleString("en-US"),
+  ratio:    v => v.toFixed(2),
+};
+
+function colorClass(v) {
+  if (v > 0) return "positive";
+  if (v < 0) return "negative";
+  return "";
+}
+
+// ── Build DOM ──────────────────────────────────────────────────────────────────
+function render(data) {
+  const m  = data.metrics;
+  const ec = data.equity_curve;
+  const app = document.getElementById("app");
+
+  app.innerHTML = `
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <h1>Strategy Performance</h1>
+        <div class="subtitle">ETF Systematic · Live Account · IBKR Singapore</div>
+      </div>
+      <div class="last-updated">
+        <span class="live-dot"></span>Updated ${data.last_updated}
+      </div>
+    </div>
+
+    <!-- Key Metrics -->
+    <div class="metrics-grid">
+      <div class="metric-card highlight">
+        <div class="metric-label">Total Return</div>
+        <div class="metric-value ${colorClass(m.total_return_pct)}">${fmt.pct(m.total_return_pct)}</div>
+        <div class="metric-sub">Since inception</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Sharpe Ratio</div>
+        <div class="metric-value neutral">${fmt.ratio(m.sharpe_ratio)}</div>
+        <div class="metric-sub">Annualised</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Max Drawdown</div>
+        <div class="metric-value ${m.max_drawdown_pct > 15 ? 'negative' : ''}">${fmt.pct(-m.max_drawdown_pct)}</div>
+        <div class="metric-sub">Peak to trough</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Win Rate</div>
+        <div class="metric-value ${colorClass(m.win_rate_pct - 50)}">${m.win_rate_pct.toFixed(1)}%</div>
+        <div class="metric-sub">${m.winning_trades}W / ${m.losing_trades}L</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Profit Factor</div>
+        <div class="metric-value ${colorClass(m.profit_factor - 1)}">${fmt.ratio(m.profit_factor)}</div>
+        <div class="metric-sub">Gross P / Gross L</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Total Trades</div>
+        <div class="metric-value">${fmt.num(m.total_trades)}</div>
+        <div class="metric-sub">Closed positions</div>
+      </div>
+    </div>
+
+    <!-- Equity Curve Chart -->
+    <div class="chart-card">
+      <div class="chart-title">Equity Curve — Account Value Over Time</div>
+      <div class="chart-wrap">
+        <canvas id="equityChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Daily PnL Chart -->
+    <div class="chart-card">
+      <div class="chart-title">Daily Net P&L</div>
+      <div class="chart-wrap">
+        <canvas id="pnlChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Bottom: Win/Loss + Stats -->
+    <div class="bottom-grid">
+      <div class="chart-card">
+        <div class="chart-title">Win / Loss Ratio</div>
+        <div class="winloss-bar">
+          <div class="winloss-fill" id="winFill" style="width: 0%"></div>
+        </div>
+        <div class="winloss-labels">
+          <span style="color: var(--accent)">${m.win_rate_pct.toFixed(1)}% Win</span>
+          <span style="color: var(--red)">${(100 - m.win_rate_pct).toFixed(1)}% Loss</span>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Account Summary</div>
+        <div class="stat-row">
+          <span class="stat-name">Starting Balance</span>
+          <span class="stat-val">${fmt.currency(m.starting_balance)}</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-name">Current Balance</span>
+          <span class="stat-val">${fmt.currency(m.ending_balance)}</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-name">Net Profit</span>
+          <span class="stat-val ${colorClass(m.ending_balance - m.starting_balance)}">${fmt.currency(m.ending_balance - m.starting_balance)}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Disclaimer -->
+    <div class="disclaimer">
+      ⚠ Past performance is not indicative of future results. This is not financial advice.
+      All figures are based on live account data and include commissions.
+      Returns are calculated on a time-weighted basis. Data updates weekly.
+    </div>
+  `;
+
+  // Animate win bar after render
+  setTimeout(() => {
+    const fill = document.getElementById("winFill");
+    if (fill) fill.style.width = m.win_rate_pct + "%";
+  }, 300);
+
+  // Draw charts
+  if (ec && ec.length > 0) {
+    drawEquityChart(ec, m.starting_balance);
+    drawPnlChart(ec);
+  }
+}
+
+// ── Equity Curve Chart ────────────────────────────────────────────────────────
+function drawEquityChart(ec, startingBalance) {
+  const labels   = ec.map(d => d.date);
+  const balances = ec.map(d => d.balance);
+
+  // Prepend starting point
+  labels.unshift("Start");
+  balances.unshift(startingBalance);
+
+  const ctx = document.getElementById("equityChart").getContext("2d");
+
+  // Gradient fill under the line
+  const gradient = ctx.createLinearGradient(0, 0, 0, 260);
+  gradient.addColorStop(0,   "rgba(79,255,176,0.18)");
+  gradient.addColorStop(0.7, "rgba(79,255,176,0.03)");
+  gradient.addColorStop(1,   "rgba(79,255,176,0)");
+
+  new Chart(ctx, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [{
+        label:           "Account Value",
+        data:            balances,
+        borderColor:     "#4fffb0",
+        borderWidth:     2,
+        backgroundColor: gradient,
+        pointRadius:     0,
+        pointHoverRadius: 4,
+        pointHoverBackgroundColor: "#4fffb0",
+        tension:         0.3,
+        fill:            true,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: "#1c2030",
+          borderColor:     "#252a3a",
+          borderWidth:     1,
+          titleColor:      "#6b7280",
+          bodyColor:       "#e8eaf2",
+          titleFont:       { family: "DM Mono", size: 11 },
+          bodyFont:        { family: "DM Mono", size: 12 },
+          callbacks: {
+            label: ctx => " " + fmt.currency(ctx.parsed.y),
+          },
+        },
+      },
+      scales: {
+        x: {
+          ticks: {
+            color:      "#6b7280",
+            font:       { family: "DM Mono", size: 10 },
+            maxTicksLimit: 8,
+            maxRotation: 0,
+          },
+          grid: { color: "#1c2030" },
+          border: { color: "#252a3a" },
+        },
+        y: {
+          ticks: {
+            color:    "#6b7280",
+            font:     { family: "DM Mono", size: 10 },
+            callback: v => "$" + (v / 1000).toFixed(0) + "k",
+          },
+          grid:   { color: "rgba(37,42,58,0.6)" },
+          border: { color: "#252a3a" },
+        },
+      },
+    },
+  });
+}
+
+// ── Daily PnL Bar Chart ───────────────────────────────────────────────────────
+function drawPnlChart(ec) {
+  const labels = ec.map(d => d.date);
+  const pnls   = ec.map(d => d.daily_pnl);
+  const colors = pnls.map(v => v >= 0 ? "rgba(79,255,176,0.75)" : "rgba(255,83,112,0.75)");
+
+  const ctx = document.getElementById("pnlChart").getContext("2d");
+
+  new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{
+        label:            "Daily P&L",
+        data:             pnls,
+        backgroundColor:  colors,
+        borderRadius:     2,
+        borderSkipped:    false,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: "#1c2030",
+          borderColor:     "#252a3a",
+          borderWidth:     1,
+          titleColor:      "#6b7280",
+          bodyColor:       "#e8eaf2",
+          titleFont:       { family: "DM Mono", size: 11 },
+          bodyFont:        { family: "DM Mono", size: 12 },
+          callbacks: {
+            label: ctx => " " + fmt.currency(ctx.parsed.y),
+          },
+        },
+      },
+      scales: {
+        x: {
+          ticks: {
+            color:         "#6b7280",
+            font:          { family: "DM Mono", size: 10 },
+            maxTicksLimit: 8,
+            maxRotation:   0,
+          },
+          grid:   { display: false },
+          border: { color: "#252a3a" },
+        },
+        y: {
+          ticks: {
+            color:    "#6b7280",
+            font:     { family: "DM Mono", size: 10 },
+            callback: v => "$" + v.toLocaleString(),
+          },
+          grid:   { color: "rgba(37,42,58,0.6)" },
+          border: { color: "#252a3a" },
+        },
+      },
+    },
+  });
+}
+
+// ── Fetch data and render ─────────────────────────────────────────────────────
+fetch(DATA_URL)
+  .then(r => {
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  })
+  .then(data => render(data))
+  .catch(err => {
+    document.getElementById("app").innerHTML = `
+      <div class="loading" style="flex-direction:column;gap:8px">
+        <span style="color:var(--red)">⚠ Could not load performance data</span>
+        <span style="font-size:0.7rem">${err.message}</span>
+        <span style="font-size:0.7rem;margin-top:4px">Check that DATA_URL in index.html points to your GitHub repo.</span>
+      </div>`;
+  });
+</script>
+</body>
+</html>
