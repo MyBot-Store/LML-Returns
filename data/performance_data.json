@@ -1,0 +1,16 @@
+{
+  "last_updated": "Pending first sync",
+  "metrics": {
+    "starting_balance": 0,
+    "ending_balance": 0,
+    "total_return_pct": 0,
+    "sharpe_ratio": 0,
+    "max_drawdown_pct": 0,
+    "win_rate_pct": 0,
+    "profit_factor": 0,
+    "total_trades": 0,
+    "winning_trades": 0,
+    "losing_trades": 0
+  },
+  "equity_curve": []
+}
