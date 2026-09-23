@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LML Strategy Performance</title>
+
+  <!-- Chart.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ── Reset & Variables ──────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #080c0f;
+      --surface:     #0d1318;
+      --surface2:    #111820;
+      --border:      rgba(255,255,255,0.07);
+      --text:        #ffffff;
+      --muted:       rgba(255,255,255,0.65);
+      --accent:      #00e5a0;
+      --accent-dim:  rgba(0,229,160,0.12);
+      --red:         #ef5350;
+      --gold:        #f5a623;
+      --font-serif:  'DM Serif Display', serif;
+      --font-mono:   'DM Mono', monospace;
+      --font-sans:   'DM Sans', sans-serif;
+    }
+
+    html, body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      font-size: 16px;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Layout ─────────────────────────────────────────────────────── */
+    .wrapper {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 36px 28px 48px;
+    }
+
+    /* ── Header ─────────────────────────────────────────────────────── */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-bottom: 32px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .header-left h1 {
+      font-family: var(--font-serif);
+      font-size: 2.2rem;
+      font-weight: 400;
+      color: var(--text);
+      letter-spacing: -0.01em;
+      line-height: 1.1;
+    }
+
+    .header-left .subtitle {
+      font-size: 0.95rem;
+      color: var(--muted);
+      margin-top: 6px;
+      font-family: var(--font-mono);
+      letter-spacing: 0.04em;
+    }
+
+    .last-updated {
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      color: var(--muted);
+      text-align: right;
+    }
+
+    .live-dot {
+      display: inline-block;
+      width: 7px; height: 7px;
+      background: var(--accent);
+      border-radius: 50%;
+      margin-right: 6px;
+      animation: pulse 2s infinite;
+      vertical-align: middle;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+
+    /* ── Metric Cards ────────────────────────────────────────────────── */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+
+    .metric-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+
+    .metric-card:hover { border-color: rgba(255,255,255,0.15); }
+
+    .metric-card.highlight {
+      border-color: rgba(0,229,160,0.3);
+      background: linear-gradient(135deg, #0d1318 60%, rgba(0,229,160,0.06));
+    }
+
+    .metric-label {
+      font-size: 0.82rem;
+      color: var(--muted);
+      font-family: var(--font-mono);
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+      font-weight: 500;
+    }
+
+    .metric-value {
+      font-family: var(--font-mono);
+      font-size: 1.55rem;
+      font-weight: 500;
+      color: var(--text);
+      line-height: 1;
+    }
+
+    .metric-value.positive { color: var(--accent); }
+    .metric-value.negative { color: var(--red); }
+    .metric-value.neutral  { color: var(--gold); }
+
+    .metric-sub {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 6px;
+      font-family: var(--font-mono);
+    }
+
+    /* ── Chart Container ─────────────────────────────────────────────── */
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+
+    .chart-title {
+      font-size: 0.82rem;
+      font-family: var(--font-mono);
+      color: var(--muted);
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      margin-bottom: 18px;
+      font-weight: 500;
+    }
+
+    .chart-wrap {
+      position: relative;
+      height: 280px;
+    }
+
+    /* ── Bottom Row: Win/Loss + Trade Stats ──────────────────────────── */
+    .bottom-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 11px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .stat-row:last-child { border-bottom: none; }
+
+    .stat-name {
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      font-weight: 500;
+    }
+    .stat-val {
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-weight: 500;
+      font-size: 0.88rem;
+    }
+
+    /* ── Win/Loss Bar ────────────────────────────────────────────────── */
+    .winloss-bar {
+      height: 7px;
+      background: var(--border);
+      border-radius: 3px;
+      margin: 14px 0 10px;
+      overflow: hidden;
+    }
+
+    .winloss-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), #00c48a);
+      border-radius: 3px;
+      transition: width 1s ease;
+    }
+
+    .winloss-labels {
+      display: flex;
+      justify-content: space-between;
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      font-weight: 500;
+    }
+
+    /* ── Disclaimer ──────────────────────────────────────────────────── */
+    .disclaimer {
+      margin-top: 24px;
+      font-size: 0.82rem;
+      color: var(--muted);
+      line-height: 1.7;
+      font-family: var(--font-mono);
+      border-top: 1px solid var(--border);
+      padding-top: 18px;
+    }
+
+    /* ── Loading / Error State ───────────────────────────────────────── */
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 300px;
+      font-family: var(--font-mono);
+      color: var(--muted);
+      font-size: 1rem;
+    }
+
+    /* ── Mobile ──────────────────────────────────────────────────────── */
+    @media (max-width: 600px) {
+      .wrapper         { padding: 24px 16px 36px; }
+      .header          { flex-direction: column; align-items: flex-start; gap: 10px; }
+      .bottom-grid     { grid-template-columns: 1fr; }
+      .metrics-grid    { grid-template-columns: repeat(2, 1fr); }
+      .chart-wrap      { height: 220px; }
+      .metric-value    { font-size: 1.3rem; }
+      /* Mobile: full white text, bold labels */
+      :root {
+        --text:  #ffffff;
+        --muted: rgba(255,255,255,0.75);
+      }
+      .metric-label, .chart-title, .stat-name,
+      .winloss-labels, .last-updated, .subtitle,
+      .disclaimer { color: rgba(255,255,255,0.75); font-weight: 500; }
+    }
+  </style>
+</head>
+
+<body>
+<div class="wrapper" id="app">
+  <div class="loading">Loading performance data…</div>
+</div>
+
+<script>
+const DATA_URL = "https://mybot-store.github.io/LML-Returns/data/performance_data.json";
+
+const fmt = {
+  pct:      v => (v >= 0 ? "+" : "") + v.toFixed(2) + "%",
+  currency: v => "$" + v.toLocaleString("en-US", {minimumFractionDigits: 2, maximumFractionDigits: 2}),
+  num:      v => v.toLocaleString("en-US"),
+  ratio:    v => v.toFixed(2),
+};
+
+function colorClass(v) {
+  if (v > 0) return "positive";
+  if (v < 0) return "negative";
+  return "";
+}
+
+function render(data) {
+  const m  = data.metrics;
+  const ec = data.equity_curve || [];
+  const app = document.getElementById("app");
+
+  // ── Filter to last 30 CALENDAR DAYS by date, not by count ───────────────
+  // Using count (slice(-30)) fails when the dataset itself has ≤30 entries —
+  // the entire history is returned. Filtering by date guarantees a true
+  // 30-calendar-day window regardless of how many data points exist.
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 30);
+  const cutoffStr = cutoff.toISOString().slice(0, 10);   // "YYYY-MM-DD"
+  const last30 = ec.filter(pt => pt.date >= cutoffStr);
+
+  // ── Compute all metrics from the 30-day slice ────────────────────────────
+  const m30 = compute30Metrics(last30) || {
+    starting_balance: m.starting_balance,
+    ending_balance:   m.ending_balance,
+    total_return_pct: m.total_return_pct,
+    max_drawdown_pct: m.max_drawdown_pct,
+    sharpe_ratio:     m.sharpe_ratio,
+    win_rate_pct:     m.win_rate_pct,
+    winning_trades:   m.winning_trades,
+    losing_trades:    m.losing_trades,
+    total_trades:     m.total_trades,
+    profit_factor:    m.profit_factor,
+  };
+
+  const netProfit = m30.ending_balance - m30.starting_balance;
+
+  // ── Build HTML using m30 directly — no patching needed ──────────────────
+  app.innerHTML = `
+    <div class="header">
+      <div class="header-left">
+        <h1>LML Strategy Performance</h1>
+        <div class="subtitle">ETF Systematic · Live Account · IBKR Singapore</div>
+      </div>
+      <div class="last-updated">
+        <span class="live-dot"></span>Updated ${data.last_updated}
+      </div>
+    </div>
+
+    <div class="metrics-grid">
+      <div class="metric-card highlight">
+        <div class="metric-label">Total Return</div>
+        <div class="metric-value ${colorClass(m30.total_return_pct)}">${fmt.pct(m30.total_return_pct)}</div>
+        <div class="metric-sub">Last 30 days</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Sharpe Ratio</div>
+        <div class="metric-value neutral">${fmt.ratio(m30.sharpe_ratio)}</div>
+        <div class="metric-sub">30-day annualised</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Max Drawdown</div>
+        <div class="metric-value ${m30.max_drawdown_pct > 15 ? 'negative' : ''}">${fmt.pct(-m30.max_drawdown_pct)}</div>
+        <div class="metric-sub">30-day peak to trough</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Win Rate</div>
+        <div class="metric-value ${colorClass(m30.win_rate_pct - 50)}">${m30.win_rate_pct.toFixed(1)}%</div>
+        <div class="metric-sub">${m30.winning_trades}W / ${m30.losing_trades}L</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Profit Factor</div>
+        <div class="metric-value ${colorClass(m30.profit_factor - 1)}">${fmt.ratio(m30.profit_factor)}</div>
+        <div class="metric-sub">Gross P / Gross L</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Active Days</div>
+        <div class="metric-value">${fmt.num(m30.total_trades)}</div>
+        <div class="metric-sub">Trading days (30-day)</div>
+      </div>
+    </div>
+
+    <div style="font-family:var(--font-mono);font-size:0.78rem;color:var(--muted);
+                margin-bottom:12px;display:flex;align-items:center;gap:10px;">
+      <span style="background:rgba(0,229,160,0.12);color:#00e5a0;
+                   padding:3px 10px;font-size:0.75rem;letter-spacing:1px;">
+        ALL DATA: LAST 30 DAYS
+      </span>
+      <span>From ${cutoffStr} to ${data.last_updated}</span>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-title">Equity Curve — Last 30 Days</div>
+      <div class="chart-wrap"><canvas id="equityChart"></canvas></div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-title">Daily Net P&L — Last 30 Days</div>
+      <div class="chart-wrap"><canvas id="pnlChart"></canvas></div>
+    </div>
+
+    <div class="bottom-grid">
+      <div class="chart-card">
+        <div class="chart-title">Win / Loss Ratio</div>
+        <div class="winloss-bar">
+          <div class="winloss-fill" id="winFill" style="width: 0%"></div>
+        </div>
+        <div class="winloss-labels">
+          <span style="color: var(--accent)">${m30.win_rate_pct.toFixed(1)}% Win</span>
+          <span style="color: var(--red)">${(100 - m30.win_rate_pct).toFixed(1)}% Loss</span>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Account Summary (30-day)</div>
+        <div class="stat-row">
+          <span class="stat-name">Opening Balance</span>
+          <span class="stat-val">${fmt.currency(m30.starting_balance)}</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-name">Current Balance</span>
+          <span class="stat-val">${fmt.currency(m30.ending_balance)}</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-name">Net Profit / Loss</span>
+          <span class="stat-val ${colorClass(netProfit)}">${fmt.currency(netProfit)}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="disclaimer">
+      ⚠ All figures cover the last 30 calendar days only. Past performance is not indicative
+      of future results. This is not financial advice. Data sourced from live IBKR account
+      via Flex Query. Updates daily.
+    </div>
+  `;
+
+  // Animate win bar
+  setTimeout(() => {
+    const fill = document.getElementById("winFill");
+    if (fill) fill.style.width = m30.win_rate_pct + "%";
+  }, 300);
+
+  // Draw charts — both filtered to the same 30-day date window
+  if (last30.length > 0) {
+    drawEquityChart(last30, last30[0].balance);
+    drawPnlChart(last30);
+  } else {
+    console.warn("No data found within the last 30 calendar days. cutoff:", cutoffStr);
+  }
+}
+
+// ── Compute 30-day metrics from equity curve slice ────────────────────────────
+// All metric cards use these figures so everything on screen is consistent
+// with the 30-day chart view. Win rate and profit factor are approximated
+// from daily P&L since per-trade breakdown is not in the JSON.
+function compute30Metrics(last30) {
+  if (!last30 || last30.length === 0) return null;
+
+  const startBal = last30[0].balance;
+  const endBal   = last30[last30.length - 1].balance;
+
+  // Total return over the 30-day window
+  const totalReturnPct = startBal > 0
+    ? (endBal - startBal) / startBal * 100
+    : 0;
+
+  // Max drawdown within the 30-day window
+  let peak  = startBal;
+  let maxDd = 0;
+  for (const pt of last30) {
+    if (pt.balance > peak) peak = pt.balance;
+    const dd = peak > 0 ? (peak - pt.balance) / peak * 100 : 0;
+    if (dd > maxDd) maxDd = dd;
+  }
+
+  // Daily P&L — exclude flat/zero days (weekends/holidays in data)
+  const pnls     = last30.map(d => d.daily_pnl).filter(p => p !== 0);
+  const winDays  = pnls.filter(p => p > 0);
+  const lossDays = pnls.filter(p => p < 0);
+
+  // Annualised Sharpe from daily P&L
+  let sharpe = 0;
+  if (pnls.length > 1) {
+    const mean = pnls.reduce((a, b) => a + b, 0) / pnls.length;
+    const variance = pnls.reduce((a, b) => a + (b - mean) ** 2, 0) / (pnls.length - 1);
+    const std = Math.sqrt(variance);
+    if (std > 0) sharpe = (mean / std) * Math.sqrt(252);
+  }
+
+  // Daily win rate (winning days as % of active trading days)
+  const winRatePct = pnls.length > 0
+    ? winDays.length / pnls.length * 100
+    : 0;
+
+  // Profit factor from daily P&L
+  const grossProfit = winDays.reduce((a, b) => a + b, 0);
+  const grossLoss   = Math.abs(lossDays.reduce((a, b) => a + b, 0));
+  const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : 0;
+
+  return {
+    starting_balance: startBal,
+    ending_balance:   endBal,
+    total_return_pct: totalReturnPct,
+    max_drawdown_pct: maxDd,
+    sharpe_ratio:     sharpe,
+    win_rate_pct:     winRatePct,
+    winning_trades:   winDays.length,   // winning days
+    losing_trades:    lossDays.length,  // losing days
+    total_trades:     pnls.length,      // active trading days
+    profit_factor:    profitFactor,
+  };
+}
+
+function drawEquityChart(ec, startingBalance) {
+  const labels   = ec.map(d => d.date);
+  const balances = ec.map(d => d.balance);
+  labels.unshift("Start");
+  balances.unshift(startingBalance);
+
+  const ctx = document.getElementById("equityChart").getContext("2d");
+  const gradient = ctx.createLinearGradient(0, 0, 0, 280);
+  gradient.addColorStop(0,   "rgba(0,229,160,0.20)");
+  gradient.addColorStop(0.7, "rgba(0,229,160,0.04)");
+  gradient.addColorStop(1,   "rgba(0,229,160,0)");
+
+  new Chart(ctx, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [{
+        label:           "Account Value",
+        data:            balances,
+        borderColor:     "#00e5a0",
+        borderWidth:     2,
+        backgroundColor: gradient,
+        pointRadius:     0,
+        pointHoverRadius: 5,
+        pointHoverBackgroundColor: "#00e5a0",
+        tension:         0.3,
+        fill:            true,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: "#0d1318",
+          borderColor:     "rgba(255,255,255,0.07)",
+          borderWidth:     1,
+          titleColor:      "rgba(255,255,255,0.65)",
+          bodyColor:       "#ffffff",
+          titleFont:       { family: "DM Mono", size: 13 },
+          bodyFont:        { family: "DM Mono", size: 14 },
+          callbacks: {
+            label: ctx => " " + fmt.currency(ctx.parsed.y),
+          },
+        },
+      },
+      scales: {
+        x: {
+          ticks: {
+            color:         "rgba(255,255,255,0.65)",
+            font:          { family: "DM Mono", size: 13 },
+            maxTicksLimit: 8,
+            maxRotation:   0,
+          },
+          grid:   { color: "rgba(255,255,255,0.04)" },
+          border: { color: "rgba(255,255,255,0.07)" },
+        },
+        y: {
+          ticks: {
+            color:    "rgba(255,255,255,0.65)",
+            font:     { family: "DM Mono", size: 13 },
+            callback: v => "$" + (v / 1000).toFixed(0) + "k",
+          },
+          grid:   { color: "rgba(255,255,255,0.05)" },
+          border: { color: "rgba(255,255,255,0.07)" },
+        },
+      },
+    },
+  });
+}
+
+function drawPnlChart(ec) {
+  const labels = ec.map(d => d.date);
+  const pnls   = ec.map(d => d.daily_pnl);
+  const colors = pnls.map(v => v >= 0 ? "rgba(0,229,160,0.8)" : "rgba(239,83,80,0.8)");
+
+  const ctx = document.getElementById("pnlChart").getContext("2d");
+
+  new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{
+        label:            "Daily P&L",
+        data:             pnls,
+        backgroundColor:  colors,
+        borderRadius:     2,
+        borderSkipped:    false,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: "#0d1318",
+          borderColor:     "rgba(255,255,255,0.07)",
+          borderWidth:     1,
+          titleColor:      "rgba(255,255,255,0.65)",
+          bodyColor:       "#ffffff",
+          titleFont:       { family: "DM Mono", size: 13 },
+          bodyFont:        { family: "DM Mono", size: 14 },
+          callbacks: {
+            label: ctx => " " + fmt.currency(ctx.parsed.y),
+          },
+        },
+      },
+      scales: {
+        x: {
+          ticks: {
+            color:         "rgba(255,255,255,0.65)",
+            font:          { family: "DM Mono", size: 13 },
+            maxTicksLimit: 8,
+            maxRotation:   0,
+          },
+          grid:   { display: false },
+          border: { color: "rgba(255,255,255,0.07)" },
+        },
+        y: {
+          ticks: {
+            color:    "rgba(255,255,255,0.65)",
+            font:     { family: "DM Mono", size: 13 },
+            callback: v => "$" + v.toLocaleString(),
+          },
+          grid:   { color: "rgba(255,255,255,0.05)" },
+          border: { color: "rgba(255,255,255,0.07)" },
+        },
+      },
+    },
+  });
+}
+
+fetch(DATA_URL)
+  .then(r => {
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  })
+  .then(data => render(data))
+  .catch(err => {
+    document.getElementById("app").innerHTML = `
+      <div class="loading" style="flex-direction:column;gap:10px">
+        <span style="color:var(--red)">&#9888; Could not load performance data</span>
+        <span style="font-size:0.85rem">${err.message}</span>
+        <span style="font-size:0.85rem;margin-top:4px">Check that DATA_URL in index.html points to your GitHub repo.</span>
+      </div>`;
+  });
+</script>
+</body>
+</html>
